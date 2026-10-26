@@ -1,0 +1,24 @@
+{% extends 'base.html' %}{% block title %}Voting results | HostelBite{% endblock %}{% block content %}<section class="page-head"><span class="eyebrow">TRANSPARENT DECISIONS</span><h1>Votes you can <em>see.</em></h1><p>These charts use votes stored in the shared SQLite database. All signed-in students and management can see the same results.</p></section><section class="stat-grid"><div class="stat panel"><small>TOTAL VOTES</small><strong>{{ total }}</strong></div><div class="stat panel"><small>SWAP REQUESTS</small><strong>{{ results|selectattr('category','equalto','swap')|map(attribute='votes')|sum }}</strong></div><div class="stat panel"><small>FOOD REVIEW VOTES</small><strong>{{ results|selectattr('category','equalto','remove')|map(attribute='votes')|sum }}</strong></div></section>
+<section class="charts-grid"><article class="panel chart-panel"><h2>Votes by day</h2><canvas id="dayChart"></canvas></article><article class="panel chart-panel"><h2>Swap vs food review</h2><canvas id="typeChart"></canvas></article><article class="panel chart-panel wide"><h2>Most requested menu changes</h2><canvas id="requestChart"></canvas></article></section>
+<section class="panel results-table"><h2>Detailed results</h2>{% if results %}<div class="table-scroll"><table><thead><tr><th>Vote type</th><th>Day</th><th>Swap target / meal</th><th>Meal type</th><th>Votes</th><th>Majority status</th></tr></thead><tbody>{% for r in results %}<tr><td>{{ 'Menu swap' if r.category=='swap' else 'Food review' }}</td><td>{{ r.day }}</td><td>{{ (r.day ~ ' ⇄ ' ~ r.target_day) if r.category=='swap' else r.meal_name }}</td><td>{{ r.meal_type or '—' }}</td><td><b>{{ r.votes }}</b></td><td><span class="status-pill {{ 'pending' if r.votes < 2 else 'review' }}">{{ 'Needs more votes' if r.votes < 2 else 'Leading request — management decides' }}</span></td></tr>{% endfor %}</tbody></table></div>{% else %}<p>No votes yet. Student votes will appear here.</p>{% endif %}<p class="tiny">A vote count alone does not automatically change the menu. Management reviews the leading request and makes the final decision.</p></section>
+{% endblock %}{% block scripts %}<script>
+const rows = {{ results|map(attribute='votes')|list|tojson }};
+const labels = {{ results|map(attribute='day')|list|tojson }};
+const cats = {{ results|map(attribute='category')|list|tojson }};
+const requestLabels = {{ results|map(attribute='target_day')|list|tojson }};
+const meals = {{ results|map(attribute='meal_name')|list|tojson }};
+const dayTotals = {};
+const typeTotals = {swap:0,remove:0};
+const requestNames = [];
+const requestValues = [];
+{% for r in results %}
+dayTotals[{{ r.day|tojson }}] = (dayTotals[{{ r.day|tojson }}] || 0) + {{ r.votes }};
+typeTotals[{{ r.category|tojson }}] += {{ r.votes }};
+requestNames.push({{ ((r.day ~ ' ⇄ ' ~ r.target_day) if r.category=='swap' else (r.day ~ ': ' ~ r.meal_name))|tojson }});
+requestValues.push({{ r.votes }});
+{% endfor %}
+const commonOptions = {responsive:true, plugins:{legend:{position:'bottom'}}};
+new Chart(document.getElementById('dayChart'), {type:'bar',data:{labels:Object.keys(dayTotals),datasets:[{label:'Votes',data:Object.values(dayTotals)}]},options:{...commonOptions,scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+new Chart(document.getElementById('typeChart'), {type:'pie',data:{labels:['Swap requests','Food review requests'],datasets:[{data:[typeTotals.swap,typeTotals.remove]}]},options:commonOptions});
+new Chart(document.getElementById('requestChart'), {type:'bar',data:{labels:requestNames,datasets:[{label:'Votes per request',data:requestValues}]},options:{...commonOptions,indexAxis:'y',scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});
+</script>{% endblock %}
